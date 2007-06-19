@@ -5,18 +5,6 @@
 # Looks for open shells, owned by root, with valid (pseudo)ttys attached and
 # checks whether they've been idle for too long.
 #
-# Changelog:
-#
-# 2007-01-16 fk
-#  * Moved changelog entries to debian changelog.
-#
-# 2007-01-10 fk
-#  * Transform unix login time into human readable form.
-#  * Basic support for logins from xterms.
-#
-# 2007-01-09 fk
-#  * Initial
-#
 # Copyright (C) 2007 Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -92,7 +80,7 @@ if ($cron_mode) {
 	print LR $cur_time;
 	close(LR) or
 		die("$CMD: writing $last_run_file: $!\n");
-	
+
 	$since_last_run = $cur_time - $last_run;
 }
 
@@ -224,7 +212,6 @@ foreach my $ppath (</proc/[0-9]*>) {
 				$send_warning = 1;
 				dp "$pid: >= 15 min inactivity\n";
 			}
-	
 		}
 	}
 
@@ -357,13 +344,13 @@ sub get_groups_of_user($)
 {
 	my $user = $_[0];
 	my %GROUPS;
-	
+
 	setgrent();
 	while (my @GE = getgrent())
 	{
 		my $group = $GE[0];
 		my @MEMBERS = split(/ /, $GE[3]);
-	
+
 		if (grep({ $_ eq $user } @MEMBERS)) {
 			$GROUPS{$group} = 1;
 		}

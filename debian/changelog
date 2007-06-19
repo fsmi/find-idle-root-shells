@@ -41,6 +41,8 @@ fsmi-root-protection (0.3) unstable; urgency=low
 fsmi-root-protection (0.2) unstable; urgency=low
 
   * Fix detection of root shells on xterms.
+  * Transform unix login time into human readable form.
+  * Basic support for logins from xterms.
 
  -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 10 Jan 2007 17:07:03 +0100
 
