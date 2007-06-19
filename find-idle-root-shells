@@ -28,7 +28,7 @@ use strict;
 use warnings;
 use Sys::Utmp;
 use Sys::Syslog;
-use POSIX qw(strftime);
+use POSIX qw(strftime uname);
 
 use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run);
 $TIME_FMT = "%Y-%m-%d %H:%M:%S";
@@ -243,10 +243,12 @@ foreach my $ppath (</proc/[0-9]*>) {
 		if ($who) {
 			$s .= "$who ";
 		}
+		$s .= "on ".(uname())[1]." ";
 		if ($from) {
-			$s .= "from $from\n";
+			$s .= "from $from";
 		}
-		$s .= "  Idle since ".strftime($TIME_FMT, localtime($last_mod)).
+		$s .= "\n".
+		      "  Idle since ".strftime($TIME_FMT, localtime($last_mod)).
 		      " (${idle_time}s)\n";
 		if ($might_kill) {
 			$s .= "  To be killed!\n";
@@ -340,13 +342,14 @@ sub get_env_of_process($)
 	open(E, "/proc/$pid/environ") or return;
 	my $l = <E>;
 	close(E);
-	
-	my @ENV_LIST = split(/\0/, $l);
-	foreach my $e (@ENV_LIST) {
-		$e =~ /^(.*?)=(.*)$/;
-		$ENV{$1} = $2;
-	}
 
+	if (defined($l)) {
+		my @ENV_LIST = split(/\0/, $l);
+		foreach my $e (@ENV_LIST) {
+			$e =~ /^(.*?)=(.*)$/;
+			$ENV{$1} = $2;
+		}
+	}
 	return %ENV;
 }
 
@@ -374,7 +377,7 @@ sub dp($)
 {
 	if ($DEBUG) {
 		if ($LOG_TO_CONSOLE) {
-#			print STDERR $_[0]."\n";
+			print STDERR $_[0]."\n";
 		}
 
 		foreach my $m (split /\n/, $_[0]) {
