@@ -1,3 +1,9 @@
+find-idle-root-shells (0.7) unstable; urgency=low
+
+  * Renames package.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 19 Jun 2007 18:49:34 +0200
+
 fsmi-root-protection (0.6) unstable; urgency=low
 
   * Fixes unquoted executable name and user matching usage within regular

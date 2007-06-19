@@ -1,5 +1,5 @@
 #
-# Regular cron jobs for the fsmi-root-protection package
+# Regular cron jobs for the find-idle-root-shells package
 #
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin

@@ -1,13 +1,15 @@
-Source: fsmi-root-protection
+Source: find-idle-root-shells
 Section: utils
 Priority: extra
 Maintainer: Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
 Build-Depends: debhelper (>= 5)
 Standards-Version: 3.7.2
 
-Package: fsmi-root-protection
+Package: find-idle-root-shells
 Architecture: all
 Depends: libsys-utmp-perl
+Replaces: fsmi-root-protection
+Conflicts: fsmi-root-protection
 Description: Detect unused root shells
  Some admins have the annoying habit not to close their precious
  root shells. This scripts puts itself into Cron and detects

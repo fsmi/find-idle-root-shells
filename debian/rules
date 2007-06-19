@@ -22,8 +22,8 @@ install:
 	dh_clean -k 
 	dh_installdirs
 
-	cp find-idle-root-shells debian/fsmi-root-protection/usr/sbin
-	cp find-idle-root-shells.8 debian/fsmi-root-protection/usr/share/man/man8
+	cp find-idle-root-shells debian/find-idle-root-shells/usr/sbin
+	cp find-idle-root-shells.8 debian/find-idle-root-shells/usr/share/man/man8
 
 
 binary-indep: install
