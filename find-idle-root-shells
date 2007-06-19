@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/perl
 #
 # Depends on libsys-utmp-perl
 #
@@ -6,6 +6,9 @@
 # checks whether they've been idle for too long.
 #
 # Changelog:
+#
+# 2007-01-16 fk
+#  * Moved changelog entries to debian changelog.
 #
 # 2007-01-10 fk
 #  * Transform unix login time into human readable form.
@@ -21,120 +24,304 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-ALLOWED_IDLE_MINUTES=15
-TMPREFIX="find-idle-root-shell"
+use strict;
+use warnings;
+use Sys::Utmp;
+use POSIX qw(strftime);
 
-on_event()
-{
-	if [ $idle_time -gt $[60 * $ALLOWED_IDLE_MINUTES] ]; then
-		h_last_mod=$(date --date=@$last_mod)
+use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS);
+$TIME_FMT = "%Y-%m-%d %H:%M:%S";
 
-		echo -n "Pid:$pid@$nodename, "
-		echo -n "Exe:$exe, "
-		if [ "$who" != "" ]; then
-			echo -n "Who:$who, "
-		fi
-		if [ "$login_time" != "" ]; then
-			echo -n "Login:'$(date --date=@$login_time)', "
-		fi
-		echo -n "Idle:'$h_last_mod' (${idle_time}s), "
-		echo    "Dev:$short_dev"
-	fi
-}
+use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG);
+$DEBUG = 0;
+$DRY_RUN = 1;
+$ALL_USERS = 0;
+$FORCED_NO_ADMIN = 0;
 
-search_login()
-{
-	if grep ":$short_dev:" $TMPUTMP >/dev/null; then
-		login=$(grep -m 1 ":$short_dev:" $TMPUTMP)
-		who=$(echo $login | sed -e 's/^\(.*\):.*:.*$/\1/')
-		login_time=$(echo $login | sed -e 's/^.*:.*:\(.*\)$/\1/')
+sub get_env_of_process($);
+sub get_tty_of_process($);
+sub get_groups_of_user($);
+sub is_valid_shell($);
+sub load_shells();
+sub load_tty();
+sub load_utmp();
+sub dp($);
+
+load_utmp();
+load_tty();
+load_shells();
+
+foreach my $ppath (</proc/[0-9]*>) {
+	#
+	# Gather information.
+	#
+
+	$ppath =~ /\/proc\/(.*)/;
+	my $pid = $1;
+
+	my $uid;
+	next unless defined($uid = (stat($ppath))[4]);
+
+	my $exe;
+	next unless defined($exe = readlink("$ppath/exe"));
+
+	# Skip non-root processes.
+	next unless ($uid == 0 || $ALL_USERS);
+
+	# Skip non-shells.
+	next unless is_valid_shell($exe);
+
+	my %ENV;
+	next unless (%ENV = get_env_of_process($pid));
+
+	my $dev;
+	next unless defined($dev = get_tty_of_process($pid));
+
+	my $last_mod;
+	next unless defined ($last_mod = (stat($dev))[9]);
+
+	# Calculate idle time.
+	my $cur_time = time();
+	my $idle_time = $cur_time - $last_mod;
+
+	my $who;
+	my $login_time;
+	my $from;
+
+
+	# Search for matching line device...
+	my $from_x = 0;
+	my $ld;
+	$dev =~ /^\/dev\/(.*)/;
+	my $short_dev = $1;
+	if (defined($UTMP{$short_dev})) {
+		$ld = $short_dev;
+	} else {
+		if ($ENV{'DISPLAY'} && 
+		    $ENV{'DISPLAY'} =~ /(.*:[0-9]+)(\.[0-9]+)?/)
+		{
+			my $short_disp = $1;
+			if (defined($UTMP{$short_disp})) {
+				$ld = $short_disp;
+				$from_x = 1;
+			}
+		}
+	}
+	if (defined($ld)) {
+		$who = ${$UTMP{$ld}}{'user'};
+		$login_time = ${$UTMP{$ld}}{'time'};
+		$from = ${$UTMP{$ld}}{'host'};
+	}
+
+	my %GROUPS;
+	if (defined($who)) {
+		%GROUPS = get_groups_of_user($who);
+	}
+
+	my $is_user = 0;
+	if (%GROUPS) {
+		if (!$GROUPS{'adm'}) {
+			$is_user = 1;
+		}
+	}
+
+	#
+	# Decide what to do.
+	#
+
+	# Defaults
+	my $send_warning = 0;
+	my $might_kill = 0;
+	my $do_kill = 0;
+
+	# Normal user or admin?
+	if ($is_user || $FORCED_NO_ADMIN) {
+		dp "$pid is normal user. idle $idle_time.\n";
+
+		# Warn after 10 minutes idle time.
+		if ($idle_time > (10 * 60)) {
+			$send_warning = 1;
+			$might_kill = 1;
+		}
+
+		# Kill after 30 minutes idle time.
+		if ($idle_time > (30 * 60)) {
+			$do_kill = 1;
+		}
+	}
 	else
-		login=""
-		who=""
-		login_time=""
-	fi
+	{
+		dp "$pid is admin. idle $idle_time.\n";
+
+		# 1st warning after 15 minutes inactivity.
+		if (($idle_time >= (15 * 60)) &&
+		    ($idle_time <  (20 * 60))) {
+			$send_warning = 1;
+			dp "$pid: 15 min inactivity\n";
+
+		# 2nd warning after 30 minutes inactivity.
+		} elsif (($idle_time >= (30 * 60)) &&
+		         ($idle_time <  (35 * 60))) {
+			$send_warning = 1;
+			dp "$pid: 30 min inactivity\n";
+
+		# Continous warnings after every 60 minutes of inactivity.
+		} elsif ($idle_time >= (60 * 60)) {
+			my $t = ($idle_time % (60 * 60));
+			dp "$pid: >=60 min inactivity ($t)\n";
+			if ($t >= (0 * 60) && $t < (5 * 60)) {
+				$send_warning = 1;
+				dp "$pid: warning >=60 min inactivity\n";
+			}
+		}
+	}
+
+
+	#
+	# Do it.
+	#
+
+	if ($send_warning) {
+		my $s;
+
+		$s = "$exe ($pid) ";
+		if ($from_x) {
+			$s .= "(X11) ";
+		}
+		if ($who) {
+			$s .= "$who ";
+		}
+		if ($from) {
+			$s .= "from $from\n";
+		}
+		$s .= "  Idle since ".strftime($TIME_FMT, localtime($last_mod)).
+		      " (${idle_time}s)\n";
+		if ($might_kill) {
+			$s .= "  To be killed!\n";
+		}
+		if ($login_time) {
+			$s .= "  Login at ".
+			      strftime($TIME_FMT, localtime($login_time))."\n";
+		}
+		$s .= "  Dev $short_dev\n";
+
+		print $s;
+	}
+	if ($do_kill) {
+		if ($DRY_RUN) {
+			print "WOULD have sent SIGUP to $pid.\n";
+		} else {
+			if (kill(1, $pid) == 1) {
+				print "Sent SIGHUP to $pid.\n";
+			} else {
+				print "Failed to send SIGHUP to $pid.\n";
+			}
+		}
+	}
 }
 
-if ! perl -e 'use Sys::Utmp;' 2>/dev/null; then
-	echo "$(basename $0): error: package libsys-utmp-perl is missing." >&2
-	exit 1
-fi
+sub load_utmp()
+{
+	my $utmp = Sys::Utmp->new();
+	while (my $utent =  $utmp->getutent())
+	{
+		if ($utent->user_process &&
+		    !defined($UTMP{$utent->ut_line()}))
+		{
+			my $l = $utent->ut_line();
 
-TMPUTMP=$(mktemp -t ${TMPREFIX}_utmp.XXXXXX)
-perl -e '
-    use Sys::Utmp;
-    use POSIX qw(strftime);
-    use warnings;
-    use strict;
-    
-    my $utmp = Sys::Utmp->new();
-    
-    while (my $utent =  $utmp->getutent())
-    {
-        if ( $utent->user_process )
-        {
-            print $utent->ut_user,":",
-	          $utent->ut_line(),":",
-		  strftime("%s",localtime($utent->ut_time())),"\n";
-        }
-    }
-    $utmp->endutent;
-' > $TMPUTMP
+			${$UTMP{$l}}{'user'} = $utent->ut_user;
+			${$UTMP{$l}}{'time'} = $utent->ut_time;
+			${$UTMP{$l}}{'host'} = $utent->ut_host;
+		}
+	}
+	$utmp->endutent;
+}
 
-TMPTTY=$(mktemp -t ${TMPREFIX}_utmp.XXXXXX)
-sed /proc/tty/drivers \
-	-e 's,[-a-zA-Z0-9/_][-a-zA-Z0-9/_]*[ \t][ \t]*\([-a-zA-Z0-9/_][-a-zA-Z0-9/_]*\).*,\1,' \
-	> $TMPTTY
+sub load_tty()
+{
+	open(D, "/proc/tty/drivers") or die "/proc/tty/drivers: $!\n";
+	while (my $d = <D>) {
+		if ($d =~ /^[-a-zA-Z0-9\/_]+[ \t]+([-a-zA-Z0-9\/_]+)[ \t]+.*$/)
+		{
+			push @TTYDRIVERS, $1;
+		}
+	}
+	close(D);
+}
 
-nodename=$(uname -n)
+sub load_shells()
+{
+	open(S, "/etc/shells") or die "/etc/shells: $!\n";
+	@SHELLS = <S>;
+	close(S);
+}
 
-TMPFILE=$(mktemp -t ${TMPREFIX}_proc.XXXXXX)
-for i in /proc/[0-9]*; do
-	pid=$(basename $i)
-	if ! cp /proc/$pid/status $TMPFILE 2>/dev/null; then
-		continue
-	fi
-	if ! exe=$(readlink /proc/$pid/exe); then
-		continue
-	fi
+sub is_valid_shell($)
+{
+	my $exe = $_[0];
+	return (grep(/^$exe$/, @SHELLS));
+}
 
-	uid=$(grep ^Uid: $TMPFILE | \
-		sed \
-			-e 's/^.*:[ \t]*//' \
-			-e 's/^\([0-9]*\)\t[0-9]*\t[0-9]*\t[0-9]*/\1/')
+sub get_tty_of_process($)
+{
+	my $pid = $_[0];
+	my $dev;
+
+	foreach my $fd (</proc/$pid/fd/[0-9]*>) {
+		next unless
+			defined($dev = readlink($fd));
+
+		foreach my $drv (@TTYDRIVERS) {
+			if ($dev =~ /^$drv/) {
+				return $dev;
+			}
+		}
+	}
+}
+
+sub get_env_of_process($)
+{
+	my $pid = $_[0];
+	my %ENV;
+
+	open(E, "/proc/$pid/environ") or return;
+	my $l = <E>;
+	close(E);
 	
-	if [ "$uid" == "0" ]; then
-		if grep "^$exe\$" /etc/shells >/dev/null; then
-			(
-			# Skip this element on error.
-			set -e
+	my @ENV_LIST = split(/\0/, $l);
+	foreach my $e (@ENV_LIST) {
+		$e =~ /^(.*?)=(.*)$/;
+		$ENV{$1} = $2;
+	}
 
-			found=
-			for i in /proc/$pid/fd/*; do
-				exec 4<$TMPTTY
-				dev=$(readlink $i)
-				while read d<&4; do
-					if echo $dev | grep "^$d" >/dev/null; then
-						found=1
-						break
-					fi
-				done
-				if [ "$found" != "" ]; then
-					break
-				fi
-			done
+	return %ENV;
+}
 
-			if [ "$found" != "" ]; then
-				short_dev=$(echo $dev | sed -e 's,^/dev/,,')
-				last_mod=$(perl -we "my @a = stat('$dev'); print \$a[9];")
-				cur_time=$(date +%s)
-				idle_time=$[$cur_time - $last_mod]
-				search_login
-				on_event
-			fi
-			)
-		fi
-	fi
-done
+sub get_groups_of_user($)
+{
+	my $user = $_[0];
+	my %GROUPS;
+	
+	setgrent();
+	while (my @GE = getgrent())
+	{
+		my $group = $GE[0];
+		my @MEMBERS = split(/ /, $GE[3]);
+	
+		if (grep(/^$user$/, @MEMBERS)) {
+			$GROUPS{$group} = 1;
+		}
+	}
+	endgrent();
 
-rm -f $TMPFILE $TMPUTMP $TMPTTY
+	return %GROUPS;
+}
+
+sub dp($)
+{
+	if ($DEBUG) {
+		print STDERR $_[0];
+	}
+}
+

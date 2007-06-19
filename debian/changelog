@@ -1,3 +1,14 @@
+fsmi-root-protection (0.3) unstable; urgency=low
+
+  * Ported to perl.
+  * Scan processes' DISPLAY to identify utmp entries for xterminals.
+  * Non adm users get stricter timing.
+  * Non adm users get SIGHUPed after 30 minutes.
+  * Adm members get de-escalated notifications ... hopefully decreases the
+    flood of messages.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 16 Jan 2007 20:11:13 +0100
+
 fsmi-root-protection (0.2) unstable; urgency=low
 
   * Fix detection of root shells on xterms.
