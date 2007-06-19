@@ -1,3 +1,10 @@
+fsmi-root-protection (0.6) unstable; urgency=low
+
+  * Fixes unquoted executable name and user matching usage within regular
+    expressions.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 18 Apr 2007 17:23:14 +0200
+
 fsmi-root-protection (0.5) unstable; urgency=low
 
   * adds node's name to log message and

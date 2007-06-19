@@ -314,7 +314,7 @@ sub load_shells()
 sub is_valid_shell($)
 {
 	my $exe = $_[0];
-	return (grep(/^$exe$/, @SHELLS));
+	return (grep({ $_ eq $exe } @SHELLS));
 }
 
 sub get_tty_of_process($)
@@ -364,7 +364,7 @@ sub get_groups_of_user($)
 		my $group = $GE[0];
 		my @MEMBERS = split(/ /, $GE[3]);
 	
-		if (grep(/^$user$/, @MEMBERS)) {
+		if (grep({ $_ eq $user } @MEMBERS)) {
 			$GROUPS{$group} = 1;
 		}
 	}
