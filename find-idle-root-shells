@@ -1,0 +1,111 @@
+#!/bin/bash
+#
+# Depends on coreutils, bash, grep, sed, debianutils, perl and libsys-utmp-perl
+#
+# Looks for open shells, owned by root, with valid (pseudo)ttys attached and
+# checks whether they've been idle for too long.
+#
+# Changelog:
+#
+# 2007-01-09 fk
+#  * Initial
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+ALLOWED_IDLE_MINUTES=15
+TMPREFIX="find-idle-root-shell"
+
+on_event()
+{
+	if [ $idle_time -gt $[60 * $ALLOWED_IDLE_MINUTES] ]; then
+		echo -n "Pid:$pid@$nodename, Exe:$exe, Who:$who, "
+		echo    "Login:$login_time, Idle:${idle_time}s, Dev:$short_dev"
+	fi
+}
+
+if ! perl -e 'use Sys::Utmp;' 2>/dev/null; then
+	echo "$(basename $0): error: package libsys-utmp-perl is missing." >&2
+	exit 1
+fi
+
+TMPUTMP=$(mktemp -t ${TMPREFIX}_utmp.XXXXXX)
+perl -e '
+    use Sys::Utmp;
+    use POSIX qw(strftime);
+    use warnings;
+    use strict;
+    
+    my $utmp = Sys::Utmp->new();
+    
+    while (my $utent =  $utmp->getutent())
+    {
+        if ( $utent->user_process )
+        {
+            print $utent->ut_user,":",$utent->ut_line(),":",strftime("%s",localtime($utent->ut_time())),"\n";
+        }
+    }
+    $utmp->endutent;
+' > $TMPUTMP
+
+TMPTTY=$(mktemp -t ${TMPREFIX}_utmp.XXXXXX)
+sed /proc/tty/drivers \
+	-e 's,[-a-zA-Z0-9/_][-a-zA-Z0-9/_]*[ \t][ \t]*\([-a-zA-Z0-9/_][-a-zA-Z0-9/_]*\).*,\1,' \
+	> $TMPTTY
+
+nodename=$(uname -n)
+
+TMPFILE=$(mktemp -t ${TMPREFIX}_proc.XXXXXX)
+for i in /proc/[0-9]*; do
+	pid=$(basename $i)
+	if ! cp /proc/$pid/status $TMPFILE 2>/dev/null; then
+		continue
+	fi
+	if ! exe=$(readlink /proc/$pid/exe); then
+		continue
+	fi
+
+	uid=$(grep ^Uid: $TMPFILE | \
+		sed \
+			-e 's/^.*:[ \t]*//' \
+			-e 's/^\([0-9]*\)\t[0-9]*\t[0-9]*\t[0-9]*/\1/')
+	
+	if grep "^$exe\$" /etc/shells >/dev/null; then
+		(
+		# Skip this element on error.
+		set -e
+
+		if [ "$uid" == "0" ]; then
+			found=
+			for i in /proc/$pid/fd/*; do
+				exec 4<$TMPTTY
+				dev=$(readlink $i)
+				while read d<&4; do
+					if echo $dev | grep "^$d" >/dev/null; then
+						found=1
+						break
+					fi
+				done
+				if [ "$found" != "" ]; then
+					break
+				fi
+			done
+
+			if [ "$found" != "" ]; then
+				short_dev=$(echo $dev | sed -e 's,^/dev/,,')
+				login=$(grep -m 1 ":$short_dev:" $TMPUTMP)
+				who=$(echo $login | sed -e 's/^\(.*\):.*:.*$/\1/')
+				login_time=$(echo $login | sed -e 's/^.*:.*:\(.*\)$/\1/')
+				last_mod=$(perl -we "my @a = stat('$dev'); print \$a[9];")
+				cur_time=$(date +%s)
+				idle_time=$[$cur_time - $last_mod]
+				on_event
+			fi
+		fi
+		)
+	fi
+done
+
+rm -f $TMPFILE $TMPUTMP $TMPTTY

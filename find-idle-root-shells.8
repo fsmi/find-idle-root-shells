@@ -1,0 +1,19 @@
+.TH FIND-IDLE-ROOT-SHELLS 8 "January 10, 2007"
+.SH NAME
+.B find-idle-root-shells
+\- detect unused root shells
+.SH SYNOPSIS
+.B find-idle-root-shells
+.SH DESCRIPTION
+.B find-idle-root-shells
+is a helper script to detect unused root shells. It was created in the need
+of a protection against bad admin habits, as some left their precious root
+shells open for the public. This utility prints idle root shells on the
+standard output, which triggers a mail when run from Cron.
+.SH OPTIONS
+There are no options. The only setting is the configured idle time which is
+currently hardcoded in the script. Changes would be overriden on update.
+.SH AUTHOR
+.B find-idle-root-shells
+was written by Fabian Knittel and put under the GPL. This manual page was
+written by Philipp Kern and is put under the same licence.
