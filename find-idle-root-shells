@@ -27,16 +27,20 @@
 use strict;
 use warnings;
 use Sys::Utmp;
+use Sys::Syslog;
 use POSIX qw(strftime);
 
-use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS);
+use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run);
 $TIME_FMT = "%Y-%m-%d %H:%M:%S";
+$VAR_DIR = "/var/run";
+$CMD = "find-idle-root-shells";
 
-use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG);
+use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG $LOG_TO_CONSOLE);
 $DEBUG = 0;
 $DRY_RUN = 1;
 $ALL_USERS = 0;
 $FORCED_NO_ADMIN = 0;
+$LOG_TO_CONSOLE = 0;
 
 sub get_env_of_process($);
 sub get_tty_of_process($);
@@ -46,10 +50,51 @@ sub load_shells();
 sub load_tty();
 sub load_utmp();
 sub dp($);
+sub within_time($$);
+
+if ($DEBUG) {
+	openlog($CMD, "pid,ndelay", "user");
+}
+
+my $cron_mode = 0;
+if ($#ARGV >= 0) {
+	if ($ARGV[0] eq '--cron-mode') {
+		$cron_mode = 1;
+	} else {
+		die "Usage: $CMD [--cron-mode]\n".
+		    "  --cron-mode  Throttle notification messages.\n";
+	}
+}
 
 load_utmp();
 load_tty();
 load_shells();
+
+my $cur_time = time();
+my $last_run;
+
+if ($cron_mode) {
+	my $last_run_file = $VAR_DIR."/".$CMD.".last-run";
+	if (-e $last_run_file) {
+		open(LR, $last_run_file) or
+			die("$CMD: reading $last_run_file: $!\n");
+		$last_run = <LR>;
+		chomp $last_run;
+		close(LR);
+	}
+	else
+	{
+		$last_run = $cur_time;
+	}
+
+	open(LR, ">".$last_run_file) or
+		die("$CMD: writing $last_run_file: $!\n");
+	print LR $cur_time;
+	close(LR) or
+		die("$CMD: writing $last_run_file: $!\n");
+	
+	$since_last_run = $cur_time - $last_run;
+}
 
 foreach my $ppath (</proc/[0-9]*>) {
 	#
@@ -81,7 +126,6 @@ foreach my $ppath (</proc/[0-9]*>) {
 	next unless defined ($last_mod = (stat($dev))[9]);
 
 	# Calculate idle time.
-	my $cur_time = time();
 	my $idle_time = $cur_time - $last_mod;
 
 	my $who;
@@ -114,7 +158,7 @@ foreach my $ppath (</proc/[0-9]*>) {
 	}
 
 	my %GROUPS;
-	if (defined($who)) {
+	if (defined($who) && ($who ne 'root')) {
 		%GROUPS = get_groups_of_user($who);
 	}
 
@@ -153,26 +197,34 @@ foreach my $ppath (</proc/[0-9]*>) {
 	{
 		dp "$pid is admin. idle $idle_time.\n";
 
-		# 1st warning after 15 minutes inactivity.
-		if (($idle_time >= (15 * 60)) &&
-		    ($idle_time <  (20 * 60))) {
-			$send_warning = 1;
-			dp "$pid: 15 min inactivity\n";
-
-		# 2nd warning after 30 minutes inactivity.
-		} elsif (($idle_time >= (30 * 60)) &&
-		         ($idle_time <  (35 * 60))) {
-			$send_warning = 1;
-			dp "$pid: 30 min inactivity\n";
-
-		# Continous warnings after every 60 minutes of inactivity.
-		} elsif ($idle_time >= (60 * 60)) {
-			my $t = ($idle_time % (60 * 60));
-			dp "$pid: >=60 min inactivity ($t)\n";
-			if ($t >= (0 * 60) && $t < (5 * 60)) {
+		if ($cron_mode) {
+			# 1st warning after 15 minutes inactivity.
+			if (within_time($idle_time, 15 * 60)) {
 				$send_warning = 1;
-				dp "$pid: warning >=60 min inactivity\n";
+				dp "$pid: 15 min inactivity\n";
+
+			# 2nd warning after 30 minutes inactivity.
+			} elsif (within_time($idle_time, 30 * 60)) {
+				$send_warning = 1;
+				dp "$pid: 30 min inactivity\n";
+
+			# Continous warnings after every 60 minutes of
+			# inactivity.
+			} elsif ($idle_time >= (60 * 60)) {
+				my $t = ($idle_time % (60 * 60));
+				dp "$pid: >=60 min inactivity ($t)\n";
+				if (within_time($t, 0)) {
+					$send_warning = 1;
+					dp "$pid: warning >=60 min inactivity\n";
+				}
 			}
+		} else {
+			# Warnings after 15 minutes inactivity.
+			if ($idle_time >= (15 * 60)) {
+				$send_warning = 1;
+				dp "$pid: >= 15 min inactivity\n";
+			}
+	
 		}
 	}
 
@@ -321,7 +373,21 @@ sub get_groups_of_user($)
 sub dp($)
 {
 	if ($DEBUG) {
-		print STDERR $_[0];
+		if ($LOG_TO_CONSOLE) {
+#			print STDERR $_[0]."\n";
+		}
+
+		foreach my $m (split /\n/, $_[0]) {
+			syslog("debug", $m);
+		}
 	}
 }
 
+sub within_time($$)
+{
+	my $idle_secs = $_[0];
+	my $expected_secs = $_[1];
+
+	return ($idle_secs >= $expected_secs &&
+	        $since_last_run > $idle_secs - $expected_secs);
+}

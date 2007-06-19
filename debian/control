@@ -1,7 +1,7 @@
 Source: fsmi-root-protection
 Section: utils
 Priority: extra
-Maintainer: Philipp Kern <pkern@debian.org>
+Maintainer: Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
 Build-Depends: debhelper (>= 5)
 Standards-Version: 3.7.2
 

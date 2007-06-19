@@ -1,3 +1,11 @@
+fsmi-root-protection (0.4) unstable; urgency=low
+
+  * Changed maintainer.
+  * Adds explicit cron mode (--cron-mode).
+  * Handles de-escalition of notification more accurately.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 17 Jan 2007 03:47:55 +0100
+
 fsmi-root-protection (0.3) unstable; urgency=low
 
   * Ported to perl.
