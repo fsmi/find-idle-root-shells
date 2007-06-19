@@ -1,14 +1,20 @@
 #!/bin/bash
 #
-# Depends on coreutils, bash, grep, sed, debianutils, perl and libsys-utmp-perl
+# Depends on libsys-utmp-perl
 #
 # Looks for open shells, owned by root, with valid (pseudo)ttys attached and
 # checks whether they've been idle for too long.
 #
 # Changelog:
 #
+# 2007-01-10 fk
+#  * Transform unix login time into human readable form.
+#  * Basic support for logins from xterms.
+#
 # 2007-01-09 fk
 #  * Initial
+#
+# Copyright (C) 2007 Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,8 +27,31 @@ TMPREFIX="find-idle-root-shell"
 on_event()
 {
 	if [ $idle_time -gt $[60 * $ALLOWED_IDLE_MINUTES] ]; then
-		echo -n "Pid:$pid@$nodename, Exe:$exe, Who:$who, "
-		echo    "Login:$login_time, Idle:${idle_time}s, Dev:$short_dev"
+		h_last_mod=$(date --date=@$last_mod)
+
+		echo -n "Pid:$pid@$nodename, "
+		echo -n "Exe:$exe, "
+		if [ "$who" != "" ]; then
+			echo -n "Who:$who, "
+		fi
+		if [ "$login_time" != "" ]; then
+			echo -n "Login:'$(date --date=@$login_time)', "
+		fi
+		echo -n "Idle:'$h_last_mod' (${idle_time}s), "
+		echo    "Dev:$short_dev"
+	fi
+}
+
+search_login()
+{
+	if grep ":$short_dev:" $TMPUTMP >/dev/null; then
+		login=$(grep -m 1 ":$short_dev:" $TMPUTMP)
+		who=$(echo $login | sed -e 's/^\(.*\):.*:.*$/\1/')
+		login_time=$(echo $login | sed -e 's/^.*:.*:\(.*\)$/\1/')
+	else
+		login=""
+		who=""
+		login_time=""
 	fi
 }
 
@@ -44,7 +73,9 @@ perl -e '
     {
         if ( $utent->user_process )
         {
-            print $utent->ut_user,":",$utent->ut_line(),":",strftime("%s",localtime($utent->ut_time())),"\n";
+            print $utent->ut_user,":",
+	          $utent->ut_line(),":",
+		  strftime("%s",localtime($utent->ut_time())),"\n";
         }
     }
     $utmp->endutent;
@@ -72,12 +103,12 @@ for i in /proc/[0-9]*; do
 			-e 's/^.*:[ \t]*//' \
 			-e 's/^\([0-9]*\)\t[0-9]*\t[0-9]*\t[0-9]*/\1/')
 	
-	if grep "^$exe\$" /etc/shells >/dev/null; then
-		(
-		# Skip this element on error.
-		set -e
+	if [ "$uid" == "0" ]; then
+		if grep "^$exe\$" /etc/shells >/dev/null; then
+			(
+			# Skip this element on error.
+			set -e
 
-		if [ "$uid" == "0" ]; then
 			found=
 			for i in /proc/$pid/fd/*; do
 				exec 4<$TMPTTY
@@ -95,16 +126,14 @@ for i in /proc/[0-9]*; do
 
 			if [ "$found" != "" ]; then
 				short_dev=$(echo $dev | sed -e 's,^/dev/,,')
-				login=$(grep -m 1 ":$short_dev:" $TMPUTMP)
-				who=$(echo $login | sed -e 's/^\(.*\):.*:.*$/\1/')
-				login_time=$(echo $login | sed -e 's/^.*:.*:\(.*\)$/\1/')
 				last_mod=$(perl -we "my @a = stat('$dev'); print \$a[9];")
 				cur_time=$(date +%s)
 				idle_time=$[$cur_time - $last_mod]
+				search_login
 				on_event
 			fi
+			)
 		fi
-		)
 	fi
 done
 
