@@ -9,6 +9,7 @@ Package: find-idle-root-shells
 Architecture: all
 Depends: libsys-utmp-perl
 Replaces: fsmi-root-protection
+Provides: fsmi-root-protection
 Conflicts: fsmi-root-protection
 Description: Detect unused root shells
  Some admins have the annoying habit not to close their precious

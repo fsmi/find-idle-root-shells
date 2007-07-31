@@ -1,4 +1,4 @@
-find-idle-root-shells (0.7) unstable; urgency=low
+find-idle-root-shells (0.7) fsmi-etch; urgency=low
 
   * Renames package.
   * Fixes is_valid_shell() check by fixing load_shells (found by Philipp Kern).
