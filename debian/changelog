@@ -1,6 +1,9 @@
 find-idle-root-shells (0.7) unstable; urgency=low
 
   * Renames package.
+  * Fixes is_valid_shell() check by fixing load_shells (found by Philipp Kern).
+  * Turns off DRY_RUN mode. The script will now send SIGHUP signals to idle
+    root processess started by non-adm group members.
 
  -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 19 Jun 2007 18:49:34 +0200
 
