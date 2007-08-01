@@ -1,3 +1,10 @@
+find-idle-root-shells (0.8) fsmi-etch; urgency=low
+
+  * Does not warn about root shells within detached screens.
+  * Slightly fixes debugging output.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed,  1 Aug 2007 18:32:15 +0200
+
 find-idle-root-shells (0.7) fsmi-etch; urgency=low
 
   * Renames package.
