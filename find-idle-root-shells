@@ -89,8 +89,8 @@ if ($cron_mode) {
 }
 
 my $pid_hash = get_processes_hash();
-foreach my $pid (keys %{$PID_HASH}) {
-	my $process = ${$PID_HASH}{$pid};
+foreach my $pid (keys %{$pid_hash}) {
+	my $process = ${$pid_hash}{$pid};
 
 	#
 	# Gather further information.
@@ -110,8 +110,8 @@ foreach my $pid (keys %{$PID_HASH}) {
 	# Only processes with a valid tty are interesting.
 	next unless ($process->ttydev ne '');
 
-	my %ENV;
-	next unless (%ENV = get_env_of_process($process->pid));
+	my $env;
+	next unless ($env = get_env_of_process($process->pid));
 
 	my $last_mod;
 	next unless defined ($last_mod = (stat($process->ttydev))[9]);
@@ -132,8 +132,8 @@ foreach my $pid (keys %{$PID_HASH}) {
 	if (defined($UTMP{$short_dev})) {
 		$ld = $short_dev;
 	} else {
-		if ($ENV{'DISPLAY'} &&
-		    $ENV{'DISPLAY'} =~ /(.*:[0-9]+)(\.[0-9]+)?/)
+		if (${$env}{'DISPLAY'} &&
+		    ${$env}{'DISPLAY'} =~ /(.*:[0-9]+)(\.[0-9]+)?/)
 		{
 			my $short_disp = $1;
 			if (defined($UTMP{$short_disp})) {
@@ -148,14 +148,14 @@ foreach my $pid (keys %{$PID_HASH}) {
 		$from = ${$UTMP{$ld}}{'host'};
 	}
 
-	my %GROUPS;
+	my $groups;
 	if (defined($who) && ($who ne 'root')) {
-		%GROUPS = get_groups_of_user($who);
+		$groups = get_groups_of_user($who);
 	}
 
 	my $is_user = 0;
-	if (%GROUPS) {
-		if (!$GROUPS{'adm'}) {
+	if ($groups) {
+		if (!${$groups}{'adm'}) {
 			$is_user = 1;
 		}
 	}
@@ -326,7 +326,7 @@ sub get_env_of_process($)
 			$ENV{$1} = $2;
 		}
 	}
-	return %ENV;
+	return \%ENV;
 }
 
 sub get_groups_of_user($)
@@ -346,7 +346,7 @@ sub get_groups_of_user($)
 	}
 	endgrent();
 
-	return %GROUPS;
+	return \%GROUPS;
 }
 
 sub dp($)
