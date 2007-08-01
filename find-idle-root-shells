@@ -33,6 +33,7 @@ $ALL_USERS = 0;
 $FORCED_NO_ADMIN = 0;
 $LOG_TO_CONSOLE = 0;
 
+sub get_processes_hash();
 sub get_env_of_process($);
 sub get_tty_of_process($);
 sub get_groups_of_user($);
@@ -87,8 +88,10 @@ if ($cron_mode) {
 	$since_last_run = $cur_time - $last_run;
 }
 
-my $process_table = new Proc::ProcessTable;
-foreach my $process (@{$process_table->table}) {
+my $pid_hash = get_processes_hash();
+foreach my $pid (keys %{$PID_HASH}) {
+	my $process = ${$PID_HASH}{$pid};
+
 	#
 	# Gather further information.
 	#
@@ -104,11 +107,11 @@ foreach my $process (@{$process_table->table}) {
 	# Skip non-shells.
 	next unless is_valid_shell($exe);
 
-	my %ENV;
-	next unless (%ENV = get_env_of_process($process->pid));
-
 	# Only processes with a valid tty are interesting.
 	next unless ($process->ttydev ne '');
+
+	my %ENV;
+	next unless (%ENV = get_env_of_process($process->pid));
 
 	my $last_mod;
 	next unless defined ($last_mod = (stat($process->ttydev))[9]);
@@ -358,6 +361,16 @@ sub dp($)
 			syslog("debug", $m);
 		}
 	}
+}
+
+sub get_processes_hash()
+{
+	my %PID_HASH;
+	my $process_table = new Proc::ProcessTable;
+	foreach my $process (@{$process_table->table}) {
+		$PID_HASH{$process->pid} = $process;
+	}
+	return \%PID_HASH;
 }
 
 sub within_time($$)
