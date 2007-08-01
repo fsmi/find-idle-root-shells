@@ -17,11 +17,14 @@ use warnings;
 use Sys::Utmp;
 use Sys::Syslog;
 use POSIX qw(strftime uname);
+use Proc::ProcessTable;
 
-use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run);
+use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run
+            $PROC_DIR);
 $TIME_FMT = "%Y-%m-%d %H:%M:%S";
 $VAR_DIR = "/var/run";
 $CMD = "find-idle-root-shells";
+$PROC_DIR = "/proc";
 
 use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG $LOG_TO_CONSOLE);
 $DEBUG = 0;
@@ -84,34 +87,31 @@ if ($cron_mode) {
 	$since_last_run = $cur_time - $last_run;
 }
 
-foreach my $ppath (</proc/[0-9]*>) {
+my $process_table = new Proc::ProcessTable;
+foreach my $process (@{$process_table->table}) {
 	#
-	# Gather information.
+	# Gather further information.
 	#
 
-	$ppath =~ /\/proc\/(.*)/;
-	my $pid = $1;
-
-	my $uid;
-	next unless defined($uid = (stat($ppath))[4]);
+	my $ppath = $PROC_DIR.'/'.$process->pid;
 
 	my $exe;
 	next unless defined($exe = readlink("$ppath/exe"));
 
 	# Skip non-root processes.
-	next unless ($uid == 0 || $ALL_USERS);
+	next unless ($process->uid == 0 || $ALL_USERS);
 
 	# Skip non-shells.
 	next unless is_valid_shell($exe);
 
 	my %ENV;
-	next unless (%ENV = get_env_of_process($pid));
+	next unless (%ENV = get_env_of_process($process->pid));
 
-	my $dev;
-	next unless defined($dev = get_tty_of_process($pid));
+	# Only processes with a valid tty are interesting.
+	next unless ($process->ttydev ne '');
 
 	my $last_mod;
-	next unless defined ($last_mod = (stat($dev))[9]);
+	next unless defined ($last_mod = (stat($process->ttydev))[9]);
 
 	# Calculate idle time.
 	my $idle_time = $cur_time - $last_mod;
@@ -124,7 +124,7 @@ foreach my $ppath (</proc/[0-9]*>) {
 	# Search for matching line device...
 	my $from_x = 0;
 	my $ld;
-	$dev =~ /^\/dev\/(.*)/;
+	$process->ttydev =~ /^\/dev\/(.*)/;
 	my $short_dev = $1;
 	if (defined($UTMP{$short_dev})) {
 		$ld = $short_dev;
@@ -168,7 +168,7 @@ foreach my $ppath (</proc/[0-9]*>) {
 
 	# Normal user or admin?
 	if ($is_user || $FORCED_NO_ADMIN) {
-		dp "$pid is normal user. idle $idle_time.\n";
+		dp $process->pid." is normal user. idle $idle_time.\n";
 
 		# Warn after 10 minutes idle time.
 		if ($idle_time > (10 * 60)) {
@@ -183,34 +183,35 @@ foreach my $ppath (</proc/[0-9]*>) {
 	}
 	else
 	{
-		dp "$pid is admin. idle $idle_time.\n";
+		dp $process->pid." is admin. idle $idle_time.\n";
 
 		if ($cron_mode) {
 			# 1st warning after 15 minutes inactivity.
 			if (within_time($idle_time, 15 * 60)) {
 				$send_warning = 1;
-				dp "$pid: 15 min inactivity\n";
+				dp $process->pid.": 15 min inactivity\n";
 
 			# 2nd warning after 30 minutes inactivity.
 			} elsif (within_time($idle_time, 30 * 60)) {
 				$send_warning = 1;
-				dp "$pid: 30 min inactivity\n";
+				dp $process->pid.": 30 min inactivity\n";
 
 			# Continous warnings after every 60 minutes of
 			# inactivity.
 			} elsif ($idle_time >= (60 * 60)) {
 				my $t = ($idle_time % (60 * 60));
-				dp "$pid: >=60 min inactivity ($t)\n";
+				dp $process->pid.": >=60 min inactivity ($t)\n";
 				if (within_time($t, 0)) {
 					$send_warning = 1;
-					dp "$pid: warning >=60 min inactivity\n";
+					dp $process->pid.": warning >=60 min ".
+					   "inactivity\n";
 				}
 			}
 		} else {
 			# Warnings after 15 minutes inactivity.
 			if ($idle_time >= (15 * 60)) {
 				$send_warning = 1;
-				dp "$pid: >= 15 min inactivity\n";
+				dp $process->pid.": >= 15 min inactivity\n";
 			}
 		}
 	}
@@ -223,7 +224,7 @@ foreach my $ppath (</proc/[0-9]*>) {
 	if ($send_warning) {
 		my $s;
 
-		$s = "$exe ($pid) ";
+		$s = "$exe (".$process->pid.") ";
 		if ($from_x) {
 			$s .= "(X11) ";
 		}
@@ -250,12 +251,13 @@ foreach my $ppath (</proc/[0-9]*>) {
 	}
 	if ($do_kill) {
 		if ($DRY_RUN) {
-			print "WOULD have sent SIGUP to $pid.\n";
+			print "WOULD have sent SIGUP to ".$process->pid.".\n";
 		} else {
-			if (kill(1, $pid) == 1) {
-				print "Sent SIGHUP to $pid.\n";
+			if (kill(1, $process->pid) == 1) {
+				print "Sent SIGHUP to ".$process->pid.".\n";
 			} else {
-				print "Failed to send SIGHUP to $pid.\n";
+				print "Failed to send SIGHUP to ".
+				      $process->pid.".\n";
 			}
 		}
 	}
@@ -305,23 +307,6 @@ sub is_valid_shell($)
 	return (grep({ $_ eq $exe } @SHELLS));
 }
 
-sub get_tty_of_process($)
-{
-	my $pid = $_[0];
-	my $dev;
-
-	foreach my $fd (</proc/$pid/fd/[0-9]*>) {
-		next unless
-			defined($dev = readlink($fd));
-
-		foreach my $drv (@TTYDRIVERS) {
-			if ($dev =~ /^$drv/) {
-				return $dev;
-			}
-		}
-	}
-}
-
 sub get_env_of_process($)
 {
 	my $pid = $_[0];
@@ -365,10 +350,11 @@ sub dp($)
 {
 	if ($DEBUG) {
 		if ($LOG_TO_CONSOLE) {
-			print STDERR $_[0]."\n";
+			print STDERR $_[0];
 		}
 
 		foreach my $m (split /\n/, $_[0]) {
+			next if ($m eq '');
 			syslog("debug", $m);
 		}
 	}

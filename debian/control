@@ -7,7 +7,7 @@ Standards-Version: 3.7.2
 
 Package: find-idle-root-shells
 Architecture: all
-Depends: libsys-utmp-perl
+Depends: libsys-utmp-perl, libproc-process-perl
 Replaces: fsmi-root-protection
 Provides: fsmi-root-protection
 Conflicts: fsmi-root-protection
