@@ -37,6 +37,10 @@ sub get_processes_hash();
 sub get_env_of_process($);
 sub get_tty_of_process($);
 sub get_groups_of_user($);
+sub get_exe_of_process($);
+sub get_tty_of_process($);
+sub is_screen_process($);
+sub is_within_unattached_screen($$);
 sub is_valid_shell($);
 sub load_shells();
 sub load_tty();
@@ -96,25 +100,27 @@ foreach my $pid (keys %{$pid_hash}) {
 	# Gather further information.
 	#
 
-	my $ppath = $PROC_DIR.'/'.$process->pid;
-
-	my $exe;
-	next unless defined($exe = readlink("$ppath/exe"));
-
 	# Skip non-root processes.
 	next unless ($process->uid == 0 || $ALL_USERS);
+
+	# Only processes with a valid tty are interesting.
+	my $tty;
+	next unless defined($tty = get_tty_of_process($process));
+
+	my $exe;
+	next unless defined($exe = get_exe_of_process($process));
 
 	# Skip non-shells.
 	next unless is_valid_shell($exe);
 
-	# Only processes with a valid tty are interesting.
-	next unless ($process->ttydev ne '');
+	# Skip processes which are running inside an unattached screen.
+	next if is_within_unattached_screen($process, $pid_hash);
 
 	my $env;
-	next unless ($env = get_env_of_process($process->pid));
+	next unless ($env = get_env_of_process($process));
 
 	my $last_mod;
-	next unless defined ($last_mod = (stat($process->ttydev))[9]);
+	next unless defined ($last_mod = (stat($tty))[9]);
 
 	# Calculate idle time.
 	my $idle_time = $cur_time - $last_mod;
@@ -127,7 +133,7 @@ foreach my $pid (keys %{$pid_hash}) {
 	# Search for matching line device...
 	my $from_x = 0;
 	my $ld;
-	$process->ttydev =~ /^\/dev\/(.*)/;
+	$tty =~ /^\/dev\/(.*)/;
 	my $short_dev = $1;
 	if (defined($UTMP{$short_dev})) {
 		$ld = $short_dev;
@@ -290,7 +296,13 @@ sub load_tty()
 	while (my $d = <D>) {
 		if ($d =~ /^[-a-zA-Z0-9\/_]+[ \t]+([-a-zA-Z0-9\/_]+)[ \t]+.*$/)
 		{
-			push @TTYDRIVERS, $1;
+			my $ttydriver = $1;
+
+			# Skip ptmx, it controls ttys, but doesn't represent
+			# in actual tty.
+			next if ($ttydriver eq '/dev/ptmx');
+
+			push @TTYDRIVERS, $ttydriver;
 		}
 	}
 	close(D);
@@ -312,7 +324,7 @@ sub is_valid_shell($)
 
 sub get_env_of_process($)
 {
-	my $pid = $_[0];
+	my $pid = $_[0]->pid;
 	my %ENV;
 
 	open(E, "/proc/$pid/environ") or return;
@@ -371,6 +383,72 @@ sub get_processes_hash()
 		$PID_HASH{$process->pid} = $process;
 	}
 	return \%PID_HASH;
+}
+
+sub get_exe_of_process($)
+{
+	my $pid = $_[0]->pid;
+	return readlink($PROC_DIR.'/'.$pid.'/exe');
+}
+
+sub is_screen_process($)
+{
+	my $process = $_[0];
+
+	my $exe;
+	if (!defined($exe = get_exe_of_process($process))) {
+		return 0;
+	}
+
+	return ($exe eq '/usr/bin/screen');
+}
+
+# This checks whether a parent process is a screen and whether that screen
+# currently has a connected tty. The screen will be seen as connected, even
+# if it is connected to a disconnected, nested screen. i.e. nesting of screens
+# is not supported and considered a too unusual special case.
+sub is_within_unattached_screen($$)
+{
+	my $process = $_[0];
+	my $pid_hash = $_[1];
+
+	while ($process->ppid != 1) {
+		my $parent = ${$pid_hash}{$process->ppid};
+
+		if (is_screen_process($parent)) {
+			if (!defined(get_tty_of_process($parent))) {
+				dp $process->pid.": nested within ".
+				   "disconnected screen ".$parent->pid."\n";
+				return 1;
+			} else {
+				dp $process->pid.": nested within ".
+				   "connected screen ".$parent->pid."\n";
+				return 0;
+			}
+		}
+		$process = $parent;
+	}
+
+	# We reached init (pid 1).
+	return 0;
+}
+
+sub get_tty_of_process($)
+{
+	my $pid = $_[0]->pid;
+	my $dev;
+
+	foreach my $fd (</proc/$pid/fd/[0-9]*>) {
+		next unless
+			defined($dev = readlink($fd));
+
+		foreach my $drv (@TTYDRIVERS) {
+			if ($dev =~ /^$drv[\d\/]*$/) {
+				return $dev;
+			}
+		}
+	}
+	return;
 }
 
 sub within_time($$)
