@@ -18,6 +18,7 @@ use Sys::Utmp;
 use Sys::Syslog;
 use POSIX qw(strftime uname);
 use Proc::ProcessTable;
+use Fcntl ':flock';
 
 use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run
             $PROC_DIR);
@@ -451,6 +452,12 @@ sub retrieve_and_update_last_run($)
 
 	my $last_run_file = $VAR_DIR.'/'.$CMD.'.last-run';
 
+	# Create exclusive lock.
+	open(LR_LOCK, ">>$last_run_file.'.LCK'") or
+		die("$CMD: could not create lock for $last_run_file: $!\n");
+	flock(LR_LOCK, LOCK_EX) or
+		die("$CMD: could not retrieve lock for $last_run_file: $!\n");
+
 	# Check whether there's anything to load.
 	if (-e $last_run_file) {
 		# Read old value.
@@ -477,4 +484,8 @@ sub retrieve_and_update_last_run($)
 	print LR $cur_time;
 	close(LR) or
 		die("$CMD: writing $last_run_file: $!\n");
+
+	# Release the lock.
+	flock(LR_LOCK, LOCK_UN);
+	close(LR_LOCK);
 }
