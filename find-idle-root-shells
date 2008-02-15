@@ -47,6 +47,7 @@ sub load_tty();
 sub load_utmp();
 sub dp($);
 sub within_time($$);
+sub retrieve_and_update_last_run($);
 
 if ($DEBUG) {
 	openlog($CMD, "pid,ndelay", "user");
@@ -70,24 +71,7 @@ my $cur_time = time();
 my $last_run;
 
 if ($cron_mode) {
-	my $last_run_file = $VAR_DIR."/".$CMD.".last-run";
-	if (-e $last_run_file) {
-		open(LR, $last_run_file) or
-			die("$CMD: reading $last_run_file: $!\n");
-		$last_run = <LR>;
-		chomp $last_run;
-		close(LR);
-	}
-	else
-	{
-		$last_run = $cur_time;
-	}
-
-	open(LR, ">".$last_run_file) or
-		die("$CMD: writing $last_run_file: $!\n");
-	print LR $cur_time;
-	close(LR) or
-		die("$CMD: writing $last_run_file: $!\n");
+	$last_run = retrieve_and_update_last_run($cur_time);
 
 	$since_last_run = $cur_time - $last_run;
 }
@@ -458,4 +442,29 @@ sub within_time($$)
 
 	return ($idle_secs >= $expected_secs &&
 	        $since_last_run > $idle_secs - $expected_secs);
+}
+
+sub retrieve_and_update_last_run($)
+{
+	my $cur_time = $_[0];
+	my $last_run;
+
+	my $last_run_file = $VAR_DIR."/".$CMD.".last-run";
+	if (-e $last_run_file) {
+		open(LR, $last_run_file) or
+			die("$CMD: reading $last_run_file: $!\n");
+		$last_run = <LR>;
+		chomp $last_run;
+		close(LR);
+	}
+	else
+	{
+		$last_run = $cur_time;
+	}
+
+	open(LR, ">".$last_run_file) or
+		die("$CMD: writing $last_run_file: $!\n");
+	print LR $cur_time;
+	close(LR) or
+		die("$CMD: writing $last_run_file: $!\n");
 }
