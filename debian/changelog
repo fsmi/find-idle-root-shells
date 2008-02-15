@@ -1,0 +1,64 @@
+find-idle-root-shells (0.8) fsmi-etch; urgency=low
+
+  * Does not warn about root shells within detached screens.
+  * Slightly fixes debugging output.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed,  1 Aug 2007 18:32:15 +0200
+
+find-idle-root-shells (0.7) fsmi-etch; urgency=low
+
+  * Renames package.
+  * Fixes is_valid_shell() check by fixing load_shells (found by Philipp Kern).
+  * Turns off DRY_RUN mode. The script will now send SIGHUP signals to idle
+    root processess started by non-adm group members.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 19 Jun 2007 18:49:34 +0200
+
+fsmi-root-protection (0.6) unstable; urgency=low
+
+  * Fixes unquoted executable name and user matching usage within regular
+    expressions.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 18 Apr 2007 17:23:14 +0200
+
+fsmi-root-protection (0.5) unstable; urgency=low
+
+  * adds node's name to log message and
+  * tries harder to avoid race conditions when accessing the environment of a
+    process.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 30 Jan 2007 17:09:06 +0100
+
+fsmi-root-protection (0.4) unstable; urgency=low
+
+  * Changed maintainer.
+  * Adds explicit cron mode (--cron-mode).
+  * Handles de-escalition of notification more accurately.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 17 Jan 2007 03:47:55 +0100
+
+fsmi-root-protection (0.3) unstable; urgency=low
+
+  * Ported to perl.
+  * Scan processes' DISPLAY to identify utmp entries for xterminals.
+  * Non adm users get stricter timing.
+  * Non adm users get SIGHUPed after 30 minutes.
+  * Adm members get de-escalated notifications ... hopefully decreases the
+    flood of messages.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Tue, 16 Jan 2007 20:11:13 +0100
+
+fsmi-root-protection (0.2) unstable; urgency=low
+
+  * Fix detection of root shells on xterms.
+  * Transform unix login time into human readable form.
+  * Basic support for logins from xterms.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Wed, 10 Jan 2007 17:07:03 +0100
+
+fsmi-root-protection (0.1) unstable; urgency=low
+
+  * Initial release
+
+ -- Philipp Kern <pkern@debian.org>  Wed, 10 Jan 2007 14:37:33 +0100
+
