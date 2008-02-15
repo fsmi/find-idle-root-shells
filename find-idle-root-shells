@@ -18,6 +18,7 @@ use Sys::Utmp;
 use Sys::Syslog;
 use POSIX qw(strftime uname);
 use Proc::ProcessTable;
+use Fcntl ':flock';
 
 use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run
             $PROC_DIR);
@@ -47,6 +48,7 @@ sub load_tty();
 sub load_utmp();
 sub dp($);
 sub within_time($$);
+sub retrieve_and_update_last_run($);
 
 if ($DEBUG) {
 	openlog($CMD, "pid,ndelay", "user");
@@ -70,24 +72,7 @@ my $cur_time = time();
 my $last_run;
 
 if ($cron_mode) {
-	my $last_run_file = $VAR_DIR."/".$CMD.".last-run";
-	if (-e $last_run_file) {
-		open(LR, $last_run_file) or
-			die("$CMD: reading $last_run_file: $!\n");
-		$last_run = <LR>;
-		chomp $last_run;
-		close(LR);
-	}
-	else
-	{
-		$last_run = $cur_time;
-	}
-
-	open(LR, ">".$last_run_file) or
-		die("$CMD: writing $last_run_file: $!\n");
-	print LR $cur_time;
-	close(LR) or
-		die("$CMD: writing $last_run_file: $!\n");
+	$last_run = retrieve_and_update_last_run($cur_time);
 
 	$since_last_run = $cur_time - $last_run;
 }
@@ -458,4 +443,49 @@ sub within_time($$)
 
 	return ($idle_secs >= $expected_secs &&
 	        $since_last_run > $idle_secs - $expected_secs);
+}
+
+sub retrieve_and_update_last_run($)
+{
+	my $cur_time = $_[0];
+	my $last_run;
+
+	my $last_run_file = $VAR_DIR.'/'.$CMD.'.last-run';
+
+	# Create exclusive lock.
+	open(LR_LOCK, ">>$last_run_file.'.LCK'") or
+		die("$CMD: could not create lock for $last_run_file: $!\n");
+	flock(LR_LOCK, LOCK_EX) or
+		die("$CMD: could not retrieve lock for $last_run_file: $!\n");
+
+	# Check whether there's anything to load.
+	if (-e $last_run_file) {
+		# Read old value.
+		open(LR, $last_run_file) or
+			die("$CMD: reading $last_run_file: $!\n");
+		if ($last_run = <LR>) {
+			# There's a value, process it.
+			chomp $last_run;
+		} else {
+			# No value there, assume no previous run.
+			$last_run = 0;
+		}
+		close(LR);
+	}
+	else
+	{
+		# No previous run.
+		$last_run = 0;
+	}
+
+	# Write current time as new 'last run' value.
+	open(LR, ">".$last_run_file) or
+		die("$CMD: writing $last_run_file: $!\n");
+	print LR $cur_time;
+	close(LR) or
+		die("$CMD: writing $last_run_file: $!\n");
+
+	# Release the lock.
+	flock(LR_LOCK, LOCK_UN);
+	close(LR_LOCK);
 }
