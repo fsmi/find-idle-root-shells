@@ -1,3 +1,9 @@
+find-idle-root-shells (0.9-1) fsmi-etch; urgency=low
+
+  * Turn package into non-native Debian package.
+
+ -- Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>  Fri, 15 Feb 2008 01:24:27 +0100
+
 find-idle-root-shells (0.8) fsmi-etch; urgency=low
 
   * Does not warn about root shells within detached screens.
