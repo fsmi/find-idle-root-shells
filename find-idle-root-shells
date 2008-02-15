@@ -449,19 +449,29 @@ sub retrieve_and_update_last_run($)
 	my $cur_time = $_[0];
 	my $last_run;
 
-	my $last_run_file = $VAR_DIR."/".$CMD.".last-run";
+	my $last_run_file = $VAR_DIR.'/'.$CMD.'.last-run';
+
+	# Check whether there's anything to load.
 	if (-e $last_run_file) {
+		# Read old value.
 		open(LR, $last_run_file) or
 			die("$CMD: reading $last_run_file: $!\n");
-		$last_run = <LR>;
-		chomp $last_run;
+		if ($last_run = <LR>) {
+			# There's a value, process it.
+			chomp $last_run;
+		} else {
+			# No value there, assume no previous run.
+			$last_run = 0;
+		}
 		close(LR);
 	}
 	else
 	{
-		$last_run = $cur_time;
+		# No previous run.
+		$last_run = 0;
 	}
 
+	# Write current time as new 'last run' value.
 	open(LR, ">".$last_run_file) or
 		die("$CMD: writing $last_run_file: $!\n");
 	print LR $cur_time;
