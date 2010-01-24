@@ -76,6 +76,7 @@ if ($cron_mode) {
 	$last_run = retrieve_and_update_last_run($cur_time);
 
 	$since_last_run = $cur_time - $last_run;
+	dp "$CMD: last run was $last_run, i.e. $since_last_run seconds ago.\n";
 }
 
 my $pid_hash = get_processes_hash();
@@ -163,7 +164,7 @@ foreach my $pid (keys %{$pid_hash}) {
 
 	# Normal user or admin?
 	if ($is_user || $FORCED_NO_ADMIN) {
-		dp $process->pid." is normal user. idle $idle_time.\n";
+		dp $process->pid.": is normal user. idle $idle_time.\n";
 
 		# Warn after 10 minutes idle time.
 		if ($idle_time > (10 * 60)) {
@@ -178,7 +179,7 @@ foreach my $pid (keys %{$pid_hash}) {
 	}
 	else
 	{
-		dp $process->pid." is admin. idle $idle_time.\n";
+		dp $process->pid.": is admin. idle $idle_time.\n";
 
 		if ($cron_mode) {
 			# 1st warning after 15 minutes inactivity.
