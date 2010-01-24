@@ -1,7 +1,7 @@
 Source: find-idle-root-shells
 Section: utils
 Priority: extra
-Maintainer: Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
+Maintainer: Fabian Knittel <fabian.knittel@avona.com>
 Build-Depends: debhelper (>= 5)
 Standards-Version: 3.7.2
 
