@@ -20,19 +20,20 @@ use POSIX qw(strftime uname);
 use Proc::ProcessTable;
 use Fcntl ':flock';
 
-use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run
-            $PROC_DIR);
+use vars qw($TIME_FMT $VAR_DIR $CMD $PROC_DIR);
 $TIME_FMT = "%Y-%m-%d %H:%M:%S";
 $VAR_DIR = "/var/run";
 $CMD = "find-idle-root-shells";
 $PROC_DIR = "/proc";
 
-use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG $LOG_TO_CONSOLE);
+use vars qw($DEBUG $DRY_RUN $ALL_USERS $FORCED_NO_ADMIN $LOG_TO_CONSOLE);
 $DEBUG = 0;
 $DRY_RUN = 0;
 $ALL_USERS = 0;
 $FORCED_NO_ADMIN = 0;
 $LOG_TO_CONSOLE = 0;
+
+use vars qw(%UTMP @TTYDRIVERS @SHELLS $since_last_run);
 
 sub get_processes_hash();
 sub get_env_of_process($);
