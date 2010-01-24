@@ -5,7 +5,7 @@
 # Looks for open shells, owned by root, with valid (pseudo)ttys attached and
 # checks whether they've been idle for too long.
 #
-# Copyright (C) 2007 Fabian Knittel <fabian.knittel@fsmi.uni-karlsruhe.de>
+# Copyright (C) 2007, 2010 Fabian Knittel <fabian.knittel@avona.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,19 +20,20 @@ use POSIX qw(strftime uname);
 use Proc::ProcessTable;
 use Fcntl ':flock';
 
-use vars qw($TIME_FMT %UTMP @TTYDRIVERS @SHELLS $VAR_DIR $CMD $since_last_run
-            $PROC_DIR);
+use vars qw($TIME_FMT $VAR_DIR $CMD $PROC_DIR);
 $TIME_FMT = "%Y-%m-%d %H:%M:%S";
 $VAR_DIR = "/var/run";
 $CMD = "find-idle-root-shells";
 $PROC_DIR = "/proc";
 
-use vars qw($FORCED_NO_ADMIN $ALL_USERS $DRY_RUN $DEBUG $LOG_TO_CONSOLE);
+use vars qw($DEBUG $DRY_RUN $ALL_USERS $FORCED_NO_ADMIN $LOG_TO_CONSOLE);
 $DEBUG = 0;
 $DRY_RUN = 0;
 $ALL_USERS = 0;
 $FORCED_NO_ADMIN = 0;
 $LOG_TO_CONSOLE = 0;
+
+use vars qw(%UTMP @TTYDRIVERS @SHELLS $since_last_run);
 
 sub get_processes_hash();
 sub get_env_of_process($);
@@ -49,6 +50,8 @@ sub load_utmp();
 sub dp($);
 sub within_time($$);
 sub retrieve_and_update_last_run($);
+sub remove_time_unit($$);
+sub human_readable_time($);
 
 if ($DEBUG) {
 	openlog($CMD, "pid,ndelay", "user");
@@ -75,6 +78,9 @@ if ($cron_mode) {
 	$last_run = retrieve_and_update_last_run($cur_time);
 
 	$since_last_run = $cur_time - $last_run;
+	$since_last_run = $since_last_run < 0 ? 0 : $since_last_run;
+	dp "$CMD: last run was at ".strftime($TIME_FMT, localtime($last_run)).
+		" i.e. ".human_readable_time($since_last_run)." ago.\n";
 }
 
 my $pid_hash = get_processes_hash();
@@ -109,6 +115,7 @@ foreach my $pid (keys %{$pid_hash}) {
 
 	# Calculate idle time.
 	my $idle_time = $cur_time - $last_mod;
+	$idle_time = $idle_time < 0 ? 0 : $idle_time;
 
 	my $who;
 	my $login_time;
@@ -162,7 +169,8 @@ foreach my $pid (keys %{$pid_hash}) {
 
 	# Normal user or admin?
 	if ($is_user || $FORCED_NO_ADMIN) {
-		dp $process->pid." is normal user. idle $idle_time.\n";
+		dp $process->pid.": is normal user. idle ".
+			human_readable_time($idle_time).".\n";
 
 		# Warn after 10 minutes idle time.
 		if ($idle_time > (10 * 60)) {
@@ -174,10 +182,9 @@ foreach my $pid (keys %{$pid_hash}) {
 		if ($idle_time > (30 * 60)) {
 			$do_kill = 1;
 		}
-	}
-	else
-	{
-		dp $process->pid." is admin. idle $idle_time.\n";
+	} else {
+		dp $process->pid.": is admin. idle ".
+			human_readable_time($idle_time).".\n";
 
 		if ($cron_mode) {
 			# 1st warning after 15 minutes inactivity.
@@ -194,7 +201,8 @@ foreach my $pid (keys %{$pid_hash}) {
 			# inactivity.
 			} elsif ($idle_time >= (60 * 60)) {
 				my $t = ($idle_time % (60 * 60));
-				dp $process->pid.": >=60 min inactivity ($t)\n";
+				dp $process->pid.": >=60 min inactivity (".
+					human_readable_time($t).")\n";
 				if (within_time($t, 0)) {
 					$send_warning = 1;
 					dp $process->pid.": warning >=60 min ".
@@ -231,7 +239,7 @@ foreach my $pid (keys %{$pid_hash}) {
 		}
 		$s .= "\n".
 		      "  Idle since ".strftime($TIME_FMT, localtime($last_mod)).
-		      " (${idle_time}s)\n";
+		      " (".human_readable_time($idle_time).")\n";
 		if ($might_kill) {
 			$s .= "  To be killed!\n";
 		}
@@ -488,4 +496,51 @@ sub retrieve_and_update_last_run($)
 	# Release the lock.
 	flock(LR_LOCK, LOCK_UN);
 	close(LR_LOCK);
+
+	return $last_run;
+}
+
+sub remove_time_unit($$)
+{
+	my ($secs, $unit_secs) = @_;
+
+	my $new_secs = $secs % $unit_secs;
+	my $units = ($secs - $new_secs) / $unit_secs;
+
+	return ($new_secs, $units);
+}
+
+sub human_readable_time($)
+{
+	my ($secs) = @_;
+
+	if ($secs < 0) {
+		dp "human_readable_time called with secs $secs\n";
+	}
+
+	my $days;
+	my $hours;
+	my $minutes;
+	($secs, $days) = remove_time_unit($secs, 24 * 60 * 60);
+	($secs, $hours) = remove_time_unit($secs, 60 * 60);
+	($secs, $minutes) = remove_time_unit($secs, 60);
+
+	my @PIECES;
+	if ($days) {
+		push @PIECES, $days.'d';
+	}
+	if ($hours) {
+		push @PIECES, $hours.'h';
+	}
+	if ($minutes) {
+		push @PIECES, $minutes.'m';
+	}
+	if ($secs) {
+		push @PIECES, $secs.'s';
+	}
+	if ($#PIECES >= 0) {
+		return join(' ', @PIECES);
+	} else {
+		return '0s';
+	}
 }
