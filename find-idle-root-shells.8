@@ -1,4 +1,4 @@
-.TH FIND-IDLE-ROOT-SHELLS 8 "January 10, 2007"
+.TH FIND-IDLE-ROOT-SHELLS 8 "January 24, 2010"
 .SH NAME
 .B find-idle-root-shells
 \- detect unused root shells
@@ -13,6 +13,13 @@ standard output, which triggers a mail when run from Cron.
 .SH OPTIONS
 There are no options. The idle time logic is hardcoded in the script. Changes
 would be overriden on update.
+.SH OPTIONS
+.TP
+.B \-\-cron\-mode
+Throttle warning messages, by remembering the last run of find-idle-root-shells
+in the file "/var/run/find-idle-root-shells.last-run". The first warning is
+issued after 15 minutes of idle time and the next after 30 minutes. Subsequent
+warnings are issued every hour.
 .SH AUTHOR
 .B find-idle-root-shells
 was written by Fabian Knittel and put under the GPL. This manual page was
