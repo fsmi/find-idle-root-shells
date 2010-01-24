@@ -490,4 +490,6 @@ sub retrieve_and_update_last_run($)
 	# Release the lock.
 	flock(LR_LOCK, LOCK_UN);
 	close(LR_LOCK);
+
+	return $last_run;
 }
