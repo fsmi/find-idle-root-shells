@@ -1,3 +1,13 @@
+find-idle-root-shells (0.10-1) fsmi-etch; urgency=low
+
+  * New upstream release:
+    + Fix cron mode.
+    + Display idle time in human readable form.
+  * Update maintainer email address.
+  * Add .gbp.conf
+
+ -- Fabian Knittel <fabian.knittel@avona.com>  Sun, 24 Jan 2010 22:06:24 +0100
+
 find-idle-root-shells (0.9-1) fsmi-etch; urgency=low
 
   * New upstream release.
