@@ -41,7 +41,7 @@ sub get_tty_of_process($);
 sub get_groups_of_user($);
 sub get_exe_of_process($);
 sub get_tty_of_process($);
-sub is_screen_process($);
+sub is_process_exe($$);
 sub is_within_unattached_screen($$);
 sub is_valid_shell($);
 sub load_shells();
@@ -384,16 +384,17 @@ sub get_exe_of_process($)
 	return readlink($PROC_DIR.'/'.$pid.'/exe');
 }
 
-sub is_screen_process($)
+sub is_process_exe($$)
 {
 	my $process = $_[0];
+	my $process_name = $_[1];
 
 	my $exe;
 	if (!defined($exe = get_exe_of_process($process))) {
 		return 0;
 	}
 
-	return ($exe eq '/usr/bin/screen');
+	return ($exe eq $process_name);
 }
 
 # This checks whether a parent process is a screen and whether that screen
@@ -408,14 +409,16 @@ sub is_within_unattached_screen($$)
 	while ($process->ppid != 1) {
 		my $parent = ${$pid_hash}{$process->ppid};
 
-		if (is_screen_process($parent)) {
+		if (is_process_exe($parent, '/usr/bin/screen') ||
+				is_process_exe($parent, '/usr/bin/tmux')) {
 			if (!defined(get_tty_of_process($parent))) {
 				dp $process->pid.": nested within ".
-				   "disconnected screen ".$parent->pid."\n";
+				   "disconnected screen/tmux ".
+				   $parent->pid."\n";
 				return 1;
 			} else {
 				dp $process->pid.": nested within ".
-				   "connected screen ".$parent->pid."\n";
+				   "connected screen/tmux ".$parent->pid."\n";
 				return 0;
 			}
 		}
