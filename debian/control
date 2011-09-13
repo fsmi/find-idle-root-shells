@@ -2,12 +2,12 @@ Source: find-idle-root-shells
 Section: utils
 Priority: extra
 Maintainer: Fabian Knittel <fabian.knittel@avona.com>
-Build-Depends: debhelper (>= 5)
+Build-Depends: debhelper (>= 7)
 Standards-Version: 3.7.2
 
 Package: find-idle-root-shells
 Architecture: all
-Depends: libsys-utmp-perl, libproc-process-perl
+Depends: libsys-utmp-perl, libproc-process-perl, ${misc:Depends}
 Replaces: fsmi-root-protection
 Provides: fsmi-root-protection
 Conflicts: fsmi-root-protection
