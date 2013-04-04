@@ -1,8 +1,7 @@
 Source: find-idle-root-shells
 Section: utils
 Priority: extra
-Maintainer: Fabian Knittel <fabian.knittel@avona.com>
-Uploaders: Timo Weingärtner <timo@tiwe.de>
+Maintainer: Fachschaft Mathe/Info Rechner-Admins <rechner@fsmi.uni-karlsruhe.de>
 Build-Depends: debhelper (>= 7)
 Standards-Version: 3.9.4
 Homepage: http://opensource.fsmi.uni-karlsruhe.de/projects/find-idle-root-shells/
