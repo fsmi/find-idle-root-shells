@@ -4,7 +4,10 @@ Priority: extra
 Maintainer: Fabian Knittel <fabian.knittel@avona.com>
 Uploaders: Timo Weingärtner <timo@tiwe.de>
 Build-Depends: debhelper (>= 7)
-Standards-Version: 3.9.2
+Standards-Version: 3.9.4
+Homepage: http://opensource.fsmi.uni-karlsruhe.de/projects/find-idle-root-shells/
+Vcs-Git: git://opensource.fsmi.uni-karlsruhe.de/find-idle-root-shells.git -b debian
+Vcs-Browser: http://opensource.fsmi.uni-karlsruhe.de/gitweb/?p=find-idle-root-shells.git;a=shortlog;h=refs/heads/debian
 
 Package: find-idle-root-shells
 Architecture: all
