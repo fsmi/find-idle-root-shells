@@ -111,7 +111,7 @@ foreach my $pid (keys %{$pid_hash}) {
 	next unless ($env = get_env_of_process($process));
 
 	my $last_mod;
-	next unless defined ($last_mod = (stat($tty))[9]);
+	next unless defined ($last_mod = (stat($tty))[8]);
 
 	# Calculate idle time.
 	my $idle_time = $cur_time - $last_mod;
